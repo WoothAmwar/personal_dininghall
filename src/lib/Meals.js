@@ -1,11 +1,20 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 export async function fetchDineOnCampusMenu(url) {
   console.log("Launching browser to fetch:", url);
 
+  // For local development, use local Chrome; for production (Vercel), use chromium
+  const isProduction = process.env.VERCEL || process.env.NODE_ENV === 'production';
+
   const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: isProduction ? chromium.args : ['--no-sandbox', '--disable-setuid-sandbox'],
+    executablePath: isProduction
+      ? await chromium.executablePath()
+      : process.platform === 'win32'
+        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+        : '/usr/bin/google-chrome',
+    headless: isProduction ? chromium.headless : true,
   });
 
   try {
@@ -22,9 +31,18 @@ export async function fetchDineOnCampusMenu(url) {
     });
 
     // Wait for the menu content to be rendered (the page loads via JavaScript)
-    // Simple wait for JavaScript to execute and render content
     console.log("Waiting for JavaScript to render menu content...");
-    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Wait for menu tables to appear (more efficient than fixed 5s delay)
+    try {
+      await page.waitForSelector('table', { timeout: 10000 });
+      // Give a bit more time for all content to finish rendering
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (err) {
+      // Fallback to fixed delay if selector doesn't appear
+      console.log("Table selector not found, using fixed delay");
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
 
     // Extract menu data directly from the page using Puppeteer
     const menuData = await page.evaluate(() => {
