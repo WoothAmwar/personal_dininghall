@@ -14,7 +14,8 @@
       "Bash(tasklist:*)",
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
-      "Bash(node test-dom-structure.js:*)"
+      "Bash(node test-dom-structure.js:*)",
+      "Bash(node test-api-local.js:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,21 +1,30 @@
-import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
-
 export async function fetchDineOnCampusMenu(url) {
   console.log("Launching browser to fetch:", url);
 
   // For local development, use local Chrome; for production (Vercel), use chromium
   const isProduction = process.env.VERCEL || process.env.NODE_ENV === 'production';
 
-  const browser = await puppeteer.launch({
-    args: isProduction ? chromium.args : ['--no-sandbox', '--disable-setuid-sandbox'],
-    executablePath: isProduction
-      ? await chromium.executablePath()
-      : process.platform === 'win32'
-        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-        : '/usr/bin/google-chrome',
-    headless: isProduction ? chromium.headless : true,
-  });
+  let browser;
+
+  if (isProduction) {
+    // Use puppeteer-core with @sparticuz/chromium for Vercel
+    const puppeteerCore = (await import("puppeteer-core")).default;
+    const chromium = (await import("@sparticuz/chromium")).default;
+
+    browser = await puppeteerCore.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+  } else {
+    // Use regular puppeteer for local development (includes bundled Chrome)
+    const puppeteer = (await import("puppeteer")).default;
+
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+  }
 
   try {
     const page = await browser.newPage();
