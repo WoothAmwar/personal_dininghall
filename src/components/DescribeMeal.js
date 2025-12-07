@@ -6,7 +6,7 @@ function GetMealData(meal_time) {
     const [error, setError] = useState(null);
 
     const today = new Date();
-    const formattedDate = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}}`;
+    const formattedDate = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
 
     useEffect(() => {
       fetch(`/api/menu?url=https://new.dineoncampus.com/uchicago/whats-on-the-menu/woodlawn-dining-commons/${formattedDate}/${meal_time}`)
