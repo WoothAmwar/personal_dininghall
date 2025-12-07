@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(node test-full-scraper.mjs:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout /t 10 /nobreak)",
+      "Bash(node test-api.js:*)",
+      "Bash(dir:*)",
+      "Bash(node test-save-html.js:*)",
+      "Bash(ping:*)",
+      "Bash(node test-after-wait.js)",
+      "Bash(cat:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(node test-dom-structure.js:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
