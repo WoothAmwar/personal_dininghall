@@ -12,7 +12,7 @@
     "@sparticuz/chromium": "^143.0.0",
     "axios": "^1.13.2",
     "cheerio": "^1.1.0",
-    "next": "16.0.7",
+    "next": "16.0.10",
     "puppeteer": "^24.32.0",
     "puppeteer-core": "^24.32.0",
     "react": "19.2.0",
