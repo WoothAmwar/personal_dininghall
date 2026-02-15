@@ -1,13 +1,26 @@
+import { MongoClient } from 'mongodb';
+
+const MONGODB_URI = "mongodb+srv://anwar09102005_db_user:loWPghkNOckAIXzL@cluster0.tu8or27.mongodb.net/?appName=Cluster0";
+let client;
+
+async function getMongoClient() {
+  if (!client) {
+    client = new MongoClient(MONGODB_URI);
+    await client.connect();
+  }
+  return client;
+}
+
 export async function fetchDineOnCampusMenu(url) {
   console.log("Launching browser to fetch:", url);
 
-  // For local development, use local Chrome; for production (Vercel), use chromium
-  const isProduction = process.env.VERCEL || process.env.NODE_ENV === 'production';
+  // For local development, use local Chrome; for production (Vercel/Lambda), use chromium
+  const isProduction = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === 'production';
 
   let browser;
 
   if (isProduction) {
-    // Use puppeteer-core with @sparticuz/chromium for Vercel
+    // Use puppeteer-core with @sparticuz/chromium for Vercel/Lambda
     const puppeteerCore = (await import("puppeteer-core")).default;
     const chromium = (await import("@sparticuz/chromium")).default;
 
@@ -31,12 +44,19 @@ export async function fetchDineOnCampusMenu(url) {
 
     // Set a realistic viewport and user agent
     await page.setViewport({ width: 1920, height: 1080 });
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+
+    // Add extra headers to look like a real browser
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Upgrade-Insecure-Requests': '1',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    });
 
     // Navigate to the page and wait for content to load
     await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 30000
+      waitUntil: 'networkidle0', // Wait until 0 network connections for at least 500ms
+      timeout: 60000 // Increase total timeout to 60s
     });
 
     // Wait for the menu content to be rendered (the page loads via JavaScript)
@@ -44,13 +64,14 @@ export async function fetchDineOnCampusMenu(url) {
 
     // Wait for menu tables to appear (more efficient than fixed 5s delay)
     try {
-      await page.waitForSelector('table', { timeout: 10000 });
-      // Give a bit more time for all content to finish rendering
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait specifically for the menu table wrapper or the table itself
+      await page.waitForSelector('table tbody tr', { timeout: 15000 });
+      // Give a bit more time for all content to finish rendering (images, interactions)
+      await new Promise(resolve => setTimeout(resolve, 3000));
     } catch (err) {
       // Fallback to fixed delay if selector doesn't appear
       console.log("Table selector not found, using fixed delay");
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 8000));
     }
 
     // Extract menu data directly from the page using Puppeteer
@@ -94,8 +115,8 @@ export async function fetchDineOnCampusMenu(url) {
           const text = grandparentPrevSibling.innerText.trim();
           // Section titles are short text like "FLAME BREAKFAST", "OMELET", etc.
           if (text && text.length > 0 && text.length < 100 &&
-              !text.includes('Click any item') &&
-              !text.includes('nutritional')) {
+            !text.includes('Click any item') &&
+            !text.includes('nutritional')) {
             sectionTitle = text.split('\n')[0].trim();
           }
         }
@@ -135,12 +156,71 @@ export async function fetchDineOnCampusMenu(url) {
     });
 
     console.log("Successfully fetched and parsed menu for:", url);
+    menuData.meal = url.split("/")[7];
+    console.log(menuData);
+    // Save to MongoDB
+    if (menuData.date && menuData.meal) {
+      try {
+        const mongo = await getMongoClient();
+        const db = mongo.db('dininghall');
+        const collection = db.collection('meals');
+
+        // Map scanned meal name to schema key (breakfast/lunch/dinner)
+        // Ensure strictly one of 'breakfast', 'lunch', 'dinner'
+        let mealKey = menuData.meal.toLowerCase();
+        if (mealKey.includes('breakfast')) mealKey = 'breakfast';
+        else if (mealKey.includes('lunch')) mealKey = 'lunch';
+        else if (mealKey.includes('dinner')) mealKey = 'dinner';
+
+        await collection.updateOne(
+          { date: menuData.date },
+          {
+            $set: {
+              [mealKey]: menuData.sections,
+              last_updated: new Date()
+            }
+          },
+          { upsert: true }
+        );
+        console.log(`Saved ${menuData.meal} data to MongoDB for date ${menuData.date}`);
+      } catch (dbError) {
+        console.error("Error saving to MongoDB:", dbError);
+      }
+    }
 
     return {
       url,
       ...menuData,
     };
   } finally {
-    await browser.close();
+    if (browser) await browser.close();
   }
 }
+
+// AWS Lambda Handler
+export const handler = async (event) => {
+  // Use 'America/Chicago' timezone to match the dining hall's location
+  const dateOptions = { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' };
+  const formatter = new Intl.DateTimeFormat('en-CA', dateOptions); // en-CA gives YYYY-MM-DD format
+  const formattedDate = formatter.format(new Date());
+
+  const allMealData = [];
+  const meals = ["breakfast", "lunch", "dinner"];
+
+  console.log(`Starting Scrape Job for ${formattedDate} (Chicago Time)`);
+
+  // Process sequentially to prevent crashing Lambda memory (1 browser at a time)
+  for (const meal_time of meals) {
+    const url = `https://new.dineoncampus.com/uchicago/whats-on-the-menu/woodlawn-dining-commons/${formattedDate}/${meal_time}`;
+    try {
+      console.log(`Fetching ${meal_time}...`);
+      const data = await fetchDineOnCampusMenu(url);
+      allMealData.push(data);
+    } catch (error) {
+      console.error(`Error fetching ${meal_time}:`, error);
+      allMealData.push({ error: error.message, meal: meal_time, failed: true });
+    }
+  }
+
+  return { statusCode: 200, body: JSON.stringify(allMealData) };
+};
