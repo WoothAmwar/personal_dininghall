@@ -63,12 +63,31 @@ export default function DescribeMeal({ meal_time }) {
           <h3 className="text-2xl font-bold mb-2 text-amber-600 dark:text-amber-200">{section.name}</h3>
           <ul className="space-y-2">
             {section.items.map((item, i_idx) => (
-              <li key={i_idx} className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between border-b border-zinc-200 dark:border-zinc-800 pb-1">
-                <span className="font-medium text-zinc-900 dark:text-zinc-100">{item.name}</span>
-                <div className="text-sm text-zinc-500 dark:text-zinc-400 flex gap-4">
-                  {item.portion && <span>{item.portion}</span>}
-                  {item.calories && <span>{item.calories} cal</span>}
+              <li key={i_idx} className="flex flex-col border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-2">
+                <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between">
+                  <span className="font-medium text-zinc-900 dark:text-zinc-100">{item.name}</span>
+                  <div className="text-sm text-zinc-500 dark:text-zinc-400 flex gap-4">
+                    {item.portion && <span>{item.portion}</span>}
+                    {item.calories && <span>{item.calories} cal</span>}
+                  </div>
                 </div>
+                {item.nutrition && item.nutrition.length > 0 && (() => {
+                  const prot = item.nutrition.find(n => n.name === "Protein (g)");
+                  const carb = item.nutrition.find(n => n.name === "Total Carbohydrates (g)");
+                  const sug = item.nutrition.find(n => n.name === "Sugar (g)");
+                  const fat = item.nutrition.find(n => n.name === "Total Fat (g)");
+                  
+                  if (!prot && !carb && !sug && !fat) return null;
+                  
+                  return (
+                    <div className="flex flex-wrap gap-2 mt-1 text-xs sm:justify-end text-zinc-500 dark:text-zinc-400">
+                      {prot && <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded shadow-sm">{prot.value}g Pro</span>}
+                      {carb && <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded shadow-sm">{carb.value}g Carb</span>}
+                      {sug && <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded shadow-sm">{sug.value}g Sug</span>}
+                      {fat && <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded shadow-sm">{fat.value}g Fat</span>}
+                    </div>
+                  );
+                })()}
               </li>
             ))}
           </ul>

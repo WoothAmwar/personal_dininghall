@@ -1,6 +1,6 @@
 import { fetchDineOnCampusMenu } from "./src/lib/Meals.js";
 
-const url = "https://new.dineoncampus.com/uchicago/whats-on-the-menu/woodlawn-dining-commons/2025-12-07/breakfast";
+const url = "https://new.dineoncampus.com/uchicago/whats-on-the-menu/woodlawn-dining-commons/2026-04-22/dinner";
 
 console.log("Testing full scraper function...");
 console.log("URL:", url, "\n");

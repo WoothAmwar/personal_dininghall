@@ -42,6 +42,19 @@ export async function fetchDineOnCampusMenu(url) {
   try {
     const page = await browser.newPage();
 
+    // Intercept the API response to get the complete JSON data with nutrition
+    let apiMenuData = null;
+    page.on('response', async response => {
+      // The DineOnCampus API URL contains 'menu?date='
+      if (response.url().includes('menu?date=')) {
+        try {
+          apiMenuData = await response.json();
+        } catch (e) {
+          console.error("Failed to parse intercepted menu JSON", e);
+        }
+      }
+    });
+
     // Set a realistic viewport and user agent
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
@@ -67,8 +80,8 @@ export async function fetchDineOnCampusMenu(url) {
       await new Promise(resolve => setTimeout(resolve, 8000));
     }
 
-    // Extract menu data directly from the page using Puppeteer
-    const menuData = await page.evaluate(() => {
+    // Extract metadata and fallback menu data directly from the page using Puppeteer
+    const pageData = await page.evaluate(() => {
       const bodyText = document.body.innerText;
 
       // Extract date, location, and meal from text
@@ -82,9 +95,9 @@ export async function fetchDineOnCampusMenu(url) {
       const mealMatch = bodyText.match(/Menu\s+([\w\s]+)\s+Location details/);
       const meal = mealMatch ? mealMatch[1].trim() : null;
 
-      // Find all tables with menu items
+      // Find all tables with menu items for fallback
       const tables = Array.from(document.querySelectorAll('table'));
-      const sections = [];
+      const fallbackSections = [];
 
       tables.forEach(table => {
         // Check if this is a menu table by looking at headers
@@ -134,19 +147,49 @@ export async function fetchDineOnCampusMenu(url) {
             name: itemName,
             portion,
             calories,
+            nutrition: [] // Fallback doesn't easily scrape nutrition
           });
         });
 
         if (items.length > 0) {
-          sections.push({
+          fallbackSections.push({
             name: sectionTitle,
             items,
           });
         }
       });
 
-      return { date, location, meal, sections };
+      return { date, location, meal, fallbackSections };
     });
+
+    // Use intercepted API data if available, otherwise use fallback scraped sections
+    let sections = [];
+    if (apiMenuData && apiMenuData.period && apiMenuData.period.categories) {
+      console.log("Using intercepted API JSON for robust data & nutrition information.");
+      sections = apiMenuData.period.categories.map(category => {
+        return {
+          name: category.name,
+          items: category.items.map(item => {
+            return {
+              name: item.name,
+              portion: item.portion || '',
+              calories: item.calories != null ? String(item.calories) : '',
+              nutrition: item.nutrients || []
+            };
+          })
+        };
+      });
+    } else {
+      console.log("API JSON not intercepted, using fallback DOM scraped generic data without nutrition details.");
+      sections = pageData.fallbackSections;
+    }
+
+    const menuData = {
+      date: pageData.date,
+      location: pageData.location,
+      meal: pageData.meal,
+      sections: sections
+    };
 
     console.log("Successfully fetched and parsed menu for:", url);
     menuData.meal = url.split("/")[7];
