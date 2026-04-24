@@ -15,12 +15,22 @@ export async function fetchDineOnCampusMenu(url) {
   console.log("Launching browser to fetch:", url);
 
   // For local development, use local Chrome; for production (Vercel/Lambda), use chromium
+  // For Raspberry Pi, use native /usr/bin/chromium-browser
   const isProduction = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === 'production';
+  const isPi = process.env.IS_PI === 'true';
 
   let browser;
 
-  if (isProduction) {
-    // Use puppeteer-core with @sparticuz/chromium for Vercel/Lambda
+  if (isPi) {
+    // 1. Run native system Chromium built for ARM on Raspberry Pi
+    const puppeteerCore = (await import("puppeteer-core")).default;
+    browser = await puppeteerCore.launch({
+      executablePath: '/usr/bin/chromium-browser', // Path to the native Pi install
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+  } else if (isProduction) {
+    // 2. Use puppeteer-core with @sparticuz/chromium for Vercel/Lambda/x86 optimization
     const puppeteerCore = (await import("puppeteer-core")).default;
     const chromium = (await import("@sparticuz/chromium")).default;
 
@@ -30,7 +40,7 @@ export async function fetchDineOnCampusMenu(url) {
       headless: chromium.headless,
     });
   } else {
-    // Use regular puppeteer for local development (includes bundled Chrome)
+    // 3. Use regular puppeteer for local Windows/Mac development (includes bundled Chrome)
     const puppeteer = (await import("puppeteer")).default;
 
     browser = await puppeteer.launch({
